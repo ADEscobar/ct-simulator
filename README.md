@@ -18,7 +18,7 @@ It provides practical insights to understand the performance of flooding protoco
 
 ## Run
 
-Execute the `ct-simulator.m` script to trigger the execution of the sample simulations and the generation of the different figures that show the results. The markup of the script supports MATLAB publishing.
+Execute the `ct_simulator.m` script to trigger the execution of the sample simulations and the generation of the different figures that show the results. The markup of the script supports MATLAB publishing.
 
 Tested using MATLAB R2018b.
 
@@ -30,3 +30,7 @@ The **ct-simulator** has been used as a base for results presented in the follow
 - Escobar-Molero, A., 2019. Improving reliability and latency of wireless sensor networks using concurrent transmissions. *at-Automatisierungstechnik*, 67(1), pp.42-50.
 - Baddeley, M., Boano, C.A., Escobar-Molero, A., Liu, Y., Ma, X., Raza, U., Römer, K., Schuß, M. and Stanoev, A., 2020, October. The impact of the physical layer on the performance of concurrent transmissions. In *2020 IEEE 28th International Conference on Network Protocols (ICNP)* (pp. 1-12). IEEE.
 - Nahas, B.A., Escobar-Molero, A., Klaue, J., Duquennoy, S. and Landsiedel, O., 2021. BlueFlood: Concurrent Transmissions for Multi-hop Bluetooth 5—Modeling and Evaluation. *ACM Transactions on Internet of Things*, 2(4), pp.1-30.
+
+And also in my dissertation:
+
+- Escobar-Molero, A., 2020. Using concurrent transmissions to improve the reliability and latency of low-power wireless mesh networks (No. RWTH-2020-05541). Lehrstuhl für Integrierte Analogschaltungen und Institut für Halbleitertechnik.
