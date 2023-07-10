@@ -37,36 +37,66 @@ freqsep = 5;   % Frequency separation (Hz)
 % result should be the well-known Bit Error Rate (BER) for non-coherent FSK
 % receivers:
 %
-% $$ BER_{BFSK} =\frac{1}{2}\exp\left(-\frac{E_{b}}{2N_{0}}\right) $$
+% $$ BER_{BFSK}=\frac{1}{2}\exp\left(-\frac{E_{b}}{2N_{0}}\right) $$
 
 % Beating parameters
 A2 = 0;        % Amplitude of transmitter 2, A1 is assumed to be 1
 fbeat = 0.01;  % Beating frequency (Hz)
 
 % Simulation parameters
-EbNo = 0:1:12; % Eb/No (dB), desired simulation range 
-N = 200000;   % Transmitted Bits
+EbNo = 0:2:12; % Eb/No (dB), desired simulation range 
+N = 600000;    % Transmitted Bits
 p_length = 1;  % Packet length, in bits
 
 % Running the simulation
-per = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,p_length);
+disp('Calculating BER for 1 Transmitter...')
+ber_1 = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,p_length);
 
 % Analytical results for comparison
 EbNo_linear = 10.^(EbNo/10);
-ber_theory = 0.5*exp(-EbNo_linear/2);
+ber_1_analytical = 0.5*exp(-EbNo_linear/2);
 
 % Plotting the results
-plot(EbNo,per,'b*')
+figure
+plot(EbNo,ber_1,'b*')
 hold on;
-plot(EbNo,ber_theory,'b-')
-set(gca, 'YScale', 'log')
+plot(EbNo,ber_1_analytical,'b-')
+set(gca,'YScale','log')
 xlabel('Eb/N0')
 ylabel('BER')
-legend('Simulated BFSK BER', 'Analytical BFSK BER')
+legend('Simulated BFSK BER A2=0','Analytical BFSK BER A2=0')
+
+%%%
+% If both transmitters are received with the same energy (_A2_ = _A1_), the
+% BER can also be obtained analytically*:
+% 
+% $$ BER=\frac{1}{2}\exp\left(-\frac{E_{b}}{N_{0}}\right)
+% I_{0}\left(-\frac{E_{b}}{N_{0}}\right) $$
+% 
+% <https://publications.rwth-aachen.de/record/791687 *>
+
+% Beating parameters
+A2 = 1;        % Amplitude of transmitter 2, A1 is assumed to be 1
+
+% Running the simulation
+disp('Calculating BER for 2 Concurrent Transmitters...')
+ber_2 = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,p_length);
+
+% Analytical results for comparison
+ber_2_analytical = 0.5*exp(-EbNo_linear).*besseli(0,-EbNo_linear);
+
+% Plotting the results
+figure
+plot(EbNo,ber_2,'b*')
+hold on;
+plot(EbNo,ber_2_analytical,'b-')
+set(gca,'YScale','log')
+xlabel('Eb/N0')
+ylabel('BER')
+legend('Simulated BFSK BER A2=1','Analytical BFSK BER A2=1')
 
 %% Simulator code
-function per = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,...
-    p_length)
+function per = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,p_length)
     t=0:1/nsamp:(N-1/nsamp);
     per=zeros(1,length(EbNo));
     data = randi([0 M-1],N,1);
