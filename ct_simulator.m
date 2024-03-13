@@ -46,11 +46,11 @@ fbeat = 0.01;  % Beating frequency (Hz)
 % Simulation parameters
 EbNo = 0:2:12; % Eb/No (dB), desired simulation range 
 N = 600000;    % Transmitted Bits
-p_length = 1;  % Packet length, in bits
+plength = 1;  % Packet length, in bits
 
 % Running the simulation
 disp('Calculating BER for 1 Transmitter...')
-ber_1 = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,p_length);
+ber_1 = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
 
 % Analytical results for comparison
 EbNo_linear = 10.^(EbNo/10);
@@ -77,10 +77,11 @@ legend('Simulated BFSK BER A2=0','Analytical BFSK BER A2=0')
 
 % Beating parameters
 A2 = 1;        % Amplitude of transmitter 2, A1 is assumed to be 1
+fbeat = 0.01;  % Beating frequency (Hz)
 
 % Running the simulation
 disp('Calculating BER for 2 Concurrent Transmitters...')
-ber_2 = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,p_length);
+ber_2 = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
 
 % Analytical results for comparison
 ber_2_analytical = 0.5*exp(-EbNo_linear).*besseli(0,-EbNo_linear);
@@ -95,17 +96,97 @@ xlabel('Eb/N0')
 ylabel('BER')
 legend('Simulated BFSK BER A2=1','Analytical BFSK BER A2=1')
 
+%% Adding energy deltas
+%%%
+% In a real scenario, both ct will not be received with the same energy. If
+% the relative amplitude of the second transmitter is reduced, i.e. the
+% energy of one of the transmissions dominates the other on the receiver
+% side, the impact of ct in the BER is reduced.
+
+% Beating parameters
+A2 = 0.5;      % Amplitude of transmitter 2, A1 is assumed to be 1
+fbeat = 0.01;  % Beating frequency (Hz)
+
+% Running the simulation
+disp('Calculating BER for 2 Concurrent Transmitters with energy delta...')
+ber_2_en_delta = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
+
+% Plotting the results
+figure
+plot(EbNo,ber_2,'-*')
+hold on;
+plot(EbNo,ber_2_en_delta,'-*')
+plot(EbNo,ber_1,'-*')
+set(gca,'YScale','log')
+xlabel('Eb/N0')
+ylabel('BER')
+legend('BFSK BER A2=1','BFSK BER A2=0.5','BFSK BER A2=0')
+
+%% Analyzing packet errors
+%%%
+% If we analyze the error at the packet level, the beating frequency
+% becomes relevant. The duration of the beating relative to the duration 
+% of the packet determines how many destructive energy valleys a packet 
+% transmission experiences, and how wide these valleys are. This has a 
+% large impact in the Packet Error Rate (PER), since bit errors tend to 
+% appear during the valleys*. We can analyze two different scenarios, 
+% one in which the beating period is "wide" (longer than the packet 
+% duration) and another in which it is "narrow" (shorter than the packet 
+% duration).
+%
+% <https://dl.acm.org/doi/10.1145/3604430 *>
+
+% We aribitrarily choose a packet length of 128 bits. 
+
+% Simulation parameters
+EbNo = 0:2:12; % Eb/No (dB), desired simulation range 
+N = 600000;    % Transmitted Bits
+plength = 128;  % Packet length, in bits
+
+%%%
+% We choose a beating period twice as long as the packet duration to 
+% illustrate wide beating and a beating period four times shorter for 
+% narrow beating.
+pduration = plength*nsamp/Fs;
+
+% Beating parameters
+A2 = 1;                 % Amplitude of transmitter 2, A1 is assumed to be 1
+fbeat = 0.5/pduration; % Beating frequency (Hz)
+
+% Running the simulation
+disp('Calculating PER for 2 Concurrent Transmitters with wide beating...')
+per_2_wide = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
+
+% Beating parameters
+A2 = 1;                 % Amplitude of transmitter 2, A1 is assumed to be 1
+fbeat = 4/pduration;   % Beating frequency (Hz)
+
+% Running the simulation
+disp(['Calculating PER for 2 Concurrent Transmitters ' ...
+    'with narrow beating...'])
+per_2_narrow = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
+
+% Plotting the results
+figure
+plot(EbNo,per_2_wide,'-*')
+hold on;
+plot(EbNo,per_2_narrow,'-*')
+set(gca,'YScale','log')
+xlabel('Eb/N0')
+ylabel('BER')
+legend('BFSK PER (wide beating)','BFSK PER (narrow beating)')
+
 %% Simulator code
-function per = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,p_length)
+function per = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength)
     t=0:1/nsamp:(N-1/nsamp);
     per=zeros(1,length(EbNo));
     data = randi([0 M-1],N,1);
     sig_beating = fskmod(data,M,freqsep,nsamp,Fs);
 
     for i=1:length(sig_beating)
-        % We consider a different (and random) intiial beating phase for 
+        % We consider a different (and random) initial beating phase for 
         % each packet transmission
-        if mod(i-1,p_length*nsamp) == 0
+        if mod(i-1,plength*nsamp) == 0
             phase = 2*pi*rand(); 
         end
         % We introducethe beating distortion to the modulated signal
@@ -120,14 +201,14 @@ function per = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,p_length)
 
         dataOut = fskdemod(sig_beating_noisy,M,freqsep,nsamp,Fs);
 
-        for j=1:p_length:(N-p_length)
-            for s=j:(j+p_length-1)
+        for j=1:plength:(N-plength)
+            for s=j:(j+plength-1)
                 if data(s) ~= dataOut(s)
                     per(i) = per(i)+1;
                     break;
                 end
             end
         end
-        per(i) = per(i)./(N/p_length);
+        per(i) = per(i)./(N/plength);
     end
 end  
