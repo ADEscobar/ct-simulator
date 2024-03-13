@@ -12,7 +12,9 @@
 % The main error source of concurrent transmissions is the beating effect. 
 % When two transmissions of amplitudes _A1_ and _A2_ and frequencies _f1_ 
 % and _f2_ overlap in the air, the superposition of both waves shows an 
-% amplitude modulation:
+% amplitude modulation (assuming they are perfectly synchronized at the 
+% symbol level, i.e. triggered at the same time and neglecting path and 
+% clock differences):
 %
 % $$ (A_1-A_2)+2A_2\left|\cos\left(2\pi\frac{f_{beat}}{2}t\right)\right| $$
 % 
@@ -30,6 +32,11 @@ Fs = 40;       % Sample rate (Hz)
 nsamp = 8;     % Number of samples per symbol
 freqsep = 5;   % Frequency separation (Hz)
 
+% Simulation parameters
+EbNo = 0:2:12; % Eb/No (dB), desired simulation range 
+N = 100000;    % Transmitted Bits
+plength = 1;   % Packet length, in bits
+
 %%%
 % First of all, we perform a basic sanity check, by setting to zero the
 % amplitude of the second transmitter, effectively removing it from the
@@ -42,11 +49,6 @@ freqsep = 5;   % Frequency separation (Hz)
 % Beating parameters
 A2 = 0;        % Amplitude of transmitter 2, A1 is assumed to be 1
 fbeat = 0.01;  % Beating frequency (Hz)
-
-% Simulation parameters
-EbNo = 0:2:12; % Eb/No (dB), desired simulation range 
-N = 600000;    % Transmitted Bits
-plength = 1;  % Packet length, in bits
 
 % Running the simulation
 disp('Calculating BER for 1 Transmitter...')
@@ -135,22 +137,16 @@ legend('BFSK BER A2=1','BFSK BER A2=0.5','BFSK BER A2=0')
 % duration).
 %
 % <https://dl.acm.org/doi/10.1145/3604430 *>
+% 
+% We aribitrarily choose a packet length of 128 bits and a beating period 
+% twice as long as the packet duration to illustrate wide beating and a 
+% beating period four times shorter for narrow beating. 
 
-% We aribitrarily choose a packet length of 128 bits. 
-
-% Simulation parameters
-EbNo = 0:2:12; % Eb/No (dB), desired simulation range 
-N = 600000;    % Transmitted Bits
-plength = 128;  % Packet length, in bits
-
-%%%
-% We choose a beating period twice as long as the packet duration to 
-% illustrate wide beating and a beating period four times shorter for 
-% narrow beating.
-pduration = plength*nsamp/Fs;
+plength = 128;                % Packet length, in bits
+pduration = plength*nsamp/Fs; % Packet duration in the air, in seconds
 
 % Beating parameters
-A2 = 1;                 % Amplitude of transmitter 2, A1 is assumed to be 1
+A2 = 1;                % Amplitude of transmitter 2, A1 is assumed to be 1
 fbeat = 0.5/pduration; % Beating frequency (Hz)
 
 % Running the simulation
@@ -158,7 +154,7 @@ disp('Calculating PER for 2 Concurrent Transmitters with wide beating...')
 per_2_wide = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
 
 % Beating parameters
-A2 = 1;                 % Amplitude of transmitter 2, A1 is assumed to be 1
+A2 = 1;                % Amplitude of transmitter 2, A1 is assumed to be 1
 fbeat = 4/pduration;   % Beating frequency (Hz)
 
 % Running the simulation
