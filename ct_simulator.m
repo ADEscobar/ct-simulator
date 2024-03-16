@@ -35,8 +35,9 @@ Fs = Rs*nsamp; % Sample rate (Hz)
 
 % Simulation parameters
 EbNo = 0:2:12; % Eb/No (dB), desired simulation range 
-N = 100000;    % Transmitted Bits
-plength = 1;   % Packet length, in bits
+N = 300000;    % Transmitted Bits
+pktlen = 1;    % Packet length, in bits (with preamble)
+preamblen = 0; % Preamble length, in bits
 
 %%%
 % First of all, we perform a basic sanity check, by setting to zero the
@@ -49,11 +50,11 @@ plength = 1;   % Packet length, in bits
 
 % Beating parameters
 A2 = 0;        % Amplitude of transmitter 2, A1 is assumed to be 1
-fbeat = 20e3;  % Beating frequency (Hz)
+fbeat = 2e3;   % Beating frequency (Hz)
 
 % Running the simulation
 disp('Calculating BER for 1 Transmitter...')
-ber_1 = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
+ber_1 = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,pktlen,preamblen);
 
 % Analytical results for comparison
 EbNo_linear = 10.^(EbNo/10);
@@ -80,11 +81,11 @@ legend('Simulated BFSK BER A2=0','Analytical BFSK BER A2=0')
 
 % Beating parameters
 A2 = 1;        % Amplitude of transmitter 2, A1 is assumed to be 1
-fbeat = 20e3;  % Beating frequency (Hz)
+fbeat = 2e3;   % Beating frequency (Hz)
 
 % Running the simulation
 disp('Calculating BER for 2 Concurrent Transmitters...')
-ber_2 = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
+ber_2 = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,pktlen,preamblen);
 
 % Analytical results for comparison
 ber_2_analytical = 0.5*exp(-EbNo_linear).*besseli(0,-EbNo_linear);
@@ -108,11 +109,12 @@ legend('Simulated BFSK BER A2=1','Analytical BFSK BER A2=1')
 
 % Beating parameters
 A2 = 0.5;      % Amplitude of transmitter 2, A1 is assumed to be 1
-fbeat = 20e3;  % Beating frequency (Hz)
+fbeat = 2e3;   % Beating frequency (Hz)
 
 % Running the simulation
 disp('Calculating BER for 2 Concurrent Transmitters with energy delta...')
-ber_2_en_delta = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
+ber_2_en_delta = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,pktlen, ...
+    preamblen);
 
 % Plotting the results
 figure
@@ -141,10 +143,10 @@ legend('BFSK BER A2=1','BFSK BER A2=0.5','BFSK BER A2=0')
 % 
 % We aribitrarily choose a packet length of 128 bits and a beating period 
 % twice as long as the packet duration to illustrate wide beating and a 
-% beating period four times shorter for narrow beating. 
+% beating period twice shorter for narrow beating. 
 
-plength = 128;                % Packet length, in bits
-pduration = plength*nsamp/Fs; % Packet duration in the air, in seconds
+pktlen = 128;                    % Packet length, in bits (with preamble)
+pduration = pktlen/(Rs*log2(M)); % Packet duration in the air, in seconds
 
 % Beating parameters
 A2 = 1;                % Amplitude of transmitter 2, A1 is assumed to be 1
@@ -152,60 +154,159 @@ fbeat = 0.5/pduration; % Beating frequency (Hz)
 
 % Running the simulation
 disp('Calculating PER for 2 Concurrent Transmitters with wide beating...')
-per_2_wide = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
+[per_wide, errindx_wide] = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat, ...
+    EbNo,N,pktlen, preamblen);
 
 % Beating parameters
 A2 = 1;                % Amplitude of transmitter 2, A1 is assumed to be 1
-fbeat = 4/pduration;   % Beating frequency (Hz)
+fbeat = 2/pduration;   % Beating frequency (Hz)
 
 % Running the simulation
 disp(['Calculating PER for 2 Concurrent Transmitters ' ...
     'with narrow beating...'])
-per_2_narrow = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength);
+[per_narrow, errindx_narrow] = ct_sim_run(M,Fs,nsamp,freqsep,A2, ...
+    fbeat,EbNo,N,pktlen, preamblen);
 
 % Plotting the results
 figure
-plot(EbNo,per_2_wide,'-*')
+plot(EbNo,per_wide,'-*')
 hold on;
-plot(EbNo,per_2_narrow,'-*')
+plot(EbNo,per_narrow,'-*')
 set(gca,'YScale','log')
 xlabel('Eb/N0')
 ylabel('BER')
 legend('BFSK PER (wide beating)','BFSK PER (narrow beating)')
 
+%% Analyzing error indexes
+%%%
+% When a new packet reception starts, initial phase of the beating is 
+% random, since it is determined by the relative frequency and phase 
+% relationship between two independent oscillators. Therefore, a flat error 
+% distribution is expected if we analyze the indexes of the errors across
+% multiple packet receptions. Nevertheless, experimentally, if we plot the
+% index of the errors after multiple packet receptions, we can see the 
+% beating pattern*. This is due to the fact that for some packets (those in 
+% which the preamble is broken) the reception will not even start. The 
+% effect is a bias (beating) in the perceived error pattern, in which the 
+% beating frequency can be observed.
+%
+% <https://dl.acm.org/doi/10.1145/3604430 *>
+% 
+
+% We choose an arbitrary preamble length of 40 bits (we assume errors in 
+% the preamble will not be reported by the receiver)
+preamblen=40;
+
+% Beating parameters
+A2 = 1;                % Amplitude of transmitter 2, A1 is assumed to be 1
+fbeat = 0.5/pduration; % Beating frequency (Hz)
+
+% Running the simulation
+disp(['Calculating PER for 2 Concurrent Transmitters with wide ' ...
+    'beating and introducing the effect of the preamble...'])
+[per_wide_preamb, errindx_wide_preamb,pktnorx_wide_preamb] = ...
+    ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,pktlen, preamblen);
+
+% Plotting the results
+figure
+EbNo_idx = ceil(length(EbNo/2)); %Plot for an arbitrary EbNo index
+plot(1:length(errindx_wide(EbNo_idx,:)),errindx_wide(EbNo_idx,:),'-*')
+hold on;
+plot(1:length(errindx_wide_preamb(EbNo_idx,:)), ...
+    errindx_wide_preamb(EbNo_idx,:),'-*')
+xlabel('Bit Index')
+ylabel('Error Count')
+msg = sprintf(['wide beating (with preamble, %u%% of packets not ' ...
+    'reported )'], round(pktnorx_wide_preamb(EbNo_idx)*100));
+legend('wide beating (without preamble)',msg)
+ylim([0 inf])
+
+% Beating parameters
+A2 = 1;                % Amplitude of transmitter 2, A1 is assumed to be 1
+fbeat = 2/pduration;   % Beating frequency (Hz)
+
+% Running the simulation
+disp(['Calculating PER for 2 Concurrent Transmitters with narrow ' ...
+    'beating and introducing the effect of the preamble...'])
+[per_narrow_preamb, errindx_narrow_preamb,pktnorx_narrow_preamb] = ...
+    ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,pktlen, preamblen);
+
+% Plotting the results
+figure
+EbNo_idx = ceil(length(EbNo/2)); %Plot for an arbitrary EbNo index
+plot(1:length(errindx_narrow(EbNo_idx,:)),errindx_narrow(EbNo_idx,:),'-*')
+hold on;
+plot(1:length(errindx_narrow_preamb(EbNo_idx,:)), ...
+    errindx_narrow_preamb(EbNo_idx,:),'-*')
+xlabel('Bit Index')
+ylabel('Error Count')
+msg = sprintf(['narrow beating (with preamble, %u%% of packets not ' ...
+    'reported )'], round(pktnorx_narrow_preamb(EbNo_idx)*100));
+legend('narrow beating (without preamble)', msg)
+ylim([0 inf])
+
 %% Simulator code
-function per = ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,plength)
-    t=0:1/nsamp:(N-1/nsamp);
-    per=zeros(1,length(EbNo));
+function [per, errindx, pktnorx] = ct_sim_run(M,Fs,nsamp,freqsep,A2, ...
+    fbeat,EbNo,N,pktlen,preamblen)
+    arguments
+        M (1,1)
+        Fs (1,1)
+        nsamp (1,1)
+        freqsep (1,1)
+        A2 (1,1)
+        fbeat (1,1)
+        EbNo (1,:)
+        N (1,1)
+        pktlen (1,1)
+        preamblen (1,1) {mustBeLessThanOrEqual(preamblen,pktlen)}
+    end
+
+    pktnorx = zeros(1,length(EbNo));
+    errindx = zeros(length(EbNo),pktlen);
+    t = 0:1/Fs:(N*nsamp/Fs-1/Fs);
+    per = zeros(1,length(EbNo));
     data = randi([0 M-1],N,1);
     sig_beating = fskmod(data,M,freqsep,nsamp,Fs);
 
-    for i=1:length(sig_beating)
+    for i = 1:length(sig_beating)
         % We consider a different (and random) initial beating phase for 
         % each packet transmission
-        if mod(i-1,plength*nsamp) == 0
+        if mod(i-1,pktlen*nsamp) == 0
             phase = 2*pi*rand(); 
         end
         % We introducethe beating distortion to the modulated signal
         sig_beating(i) = sig_beating(i)*...
-            (1-A2+2*A2*abs(cos(2*pi*((fbeat/Fs)/2)*t(i)+phase)));
+            (1-A2+2*A2*abs(cos(2*pi*((fbeat/2)*t(i))+phase)));
     end
 
-    for i=1:length(EbNo)
+    for i = 1:length(EbNo)
         % We add AWGN noise to the concurrent transmission
         sig_beating_noisy  = awgn(sig_beating,EbNo(i)+10*log10(log2(M))...
             -10*log10(nsamp),0,'dB');
 
         dataOut = fskdemod(sig_beating_noisy,M,freqsep,nsamp,Fs);
 
-        for j=1:plength:(N-plength)
-            for s=j:(j+plength-1)
+        total_pkt = 0;
+        for j = 1:pktlen:(N-pktlen)
+            first_pkt_error = true;
+            total_pkt = total_pkt+1;
+            for s = j:(j+pktlen-1)
                 if data(s) ~= dataOut(s)
-                    per(i) = per(i)+1;
-                    break;
+                    if s-j+1 < preamblen
+                        per(i) = per(i)+1;
+                        pktnorx(i) = pktnorx(i)+1;
+                        break;
+                    else
+                        errindx(i,s-j+1) = errindx(i,s-j+1)+1; 
+                        if first_pkt_error
+                            per(i) = per(i)+1;
+                            first_pkt_error = false;
+                        end
+                    end
                 end
             end
         end
-        per(i) = per(i)./(N/plength);
+        pktnorx(i) = pktnorx(i)./total_pkt;
+        per(i) = per(i)./(N/pktlen);
     end
 end  

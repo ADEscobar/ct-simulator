@@ -9,11 +9,12 @@ It provides practical insights to understand the performance of flooding protoco
 
 - Quick simulations based on a modified baseband-equivalent model tweaked to introduced the amplitude distortion of the envelope caused by the overlap of the transmissions
 - Explained step-by-step process, including comparisons with theoretical results to validate the correctness of the simulations
-- Obtention of PER vs Eb/N0 figures of merit
+- Provides PER vs Eb/N0 figures of merit and the index position of the symbol errors within the packet
 - Configurable FSK modulation parameters, such as the modulation order, sampling rate and frequency separation
 - Easily extendable to different modulations and noise models
-- Configurable packet lengths
+- Configurable packet and preamble lengths
 - The relative energy of the concurrent transmissions can be modified, e.g. one transmitter can be set as dominant
+- The beating frequency can be modified to simulate different beating patterns, e.g. wide or narrow
 
 
 ## Run
