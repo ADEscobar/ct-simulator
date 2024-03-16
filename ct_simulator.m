@@ -24,13 +24,14 @@
 
 %% Comparing simulation results with well-known analytical figures
 % For simplicity and easiness of comparison with analytical results, we
-% consider non-coherent reception of binary FSK transmissions. 
+% consider noncoherent reception of binary FSK transmissions. 
 
 % Modulation parameters
 M = 2;         % Modulation order
-Fs = 40;       % Sample rate (Hz)
+Rs = 1e6;      % Symbol rate (1Mbps)
+freqsep = Rs;  % Frequency separation (optimal for noncoherent detection)
 nsamp = 8;     % Number of samples per symbol
-freqsep = 5;   % Frequency separation (Hz)
+Fs = Rs*nsamp; % Sample rate (Hz)
 
 % Simulation parameters
 EbNo = 0:2:12; % Eb/No (dB), desired simulation range 
@@ -41,14 +42,14 @@ plength = 1;   % Packet length, in bits
 % First of all, we perform a basic sanity check, by setting to zero the
 % amplitude of the second transmitter, effectively removing it from the
 % simulation, and fixing the packet length to 1 bit. In that case, the
-% result should be the well-known Bit Error Rate (BER) for non-coherent FSK
+% result should be the well-known Bit Error Rate (BER) for noncoherent FSK
 % receivers:
 %
 % $$ BER_{BFSK}=\frac{1}{2}\exp\left(-\frac{E_{b}}{2N_{0}}\right) $$
 
 % Beating parameters
 A2 = 0;        % Amplitude of transmitter 2, A1 is assumed to be 1
-fbeat = 0.01;  % Beating frequency (Hz)
+fbeat = 20e3;  % Beating frequency (Hz)
 
 % Running the simulation
 disp('Calculating BER for 1 Transmitter...')
@@ -79,7 +80,7 @@ legend('Simulated BFSK BER A2=0','Analytical BFSK BER A2=0')
 
 % Beating parameters
 A2 = 1;        % Amplitude of transmitter 2, A1 is assumed to be 1
-fbeat = 0.01;  % Beating frequency (Hz)
+fbeat = 20e3;  % Beating frequency (Hz)
 
 % Running the simulation
 disp('Calculating BER for 2 Concurrent Transmitters...')
@@ -107,7 +108,7 @@ legend('Simulated BFSK BER A2=1','Analytical BFSK BER A2=1')
 
 % Beating parameters
 A2 = 0.5;      % Amplitude of transmitter 2, A1 is assumed to be 1
-fbeat = 0.01;  % Beating frequency (Hz)
+fbeat = 20e3;  % Beating frequency (Hz)
 
 % Running the simulation
 disp('Calculating BER for 2 Concurrent Transmitters with energy delta...')
