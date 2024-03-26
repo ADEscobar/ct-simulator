@@ -193,9 +193,9 @@ legend('BFSK PER (wide beating)','BFSK PER (narrow beating)')
 % <https://dl.acm.org/doi/10.1145/3604430 *>
 % 
 
-% We choose an arbitrary preamble length of 40 bits (we assume errors in 
+% We choose an arbitrary preamble length of 32 bits (we assume errors in 
 % the preamble will not be reported by the receiver)
-preamblen=40;
+preamblen=32;          % Preamble length, in bits
 
 % Beating parameters
 A2 = 1;                % Amplitude of transmitter 2, A1 is assumed to be 1
@@ -244,6 +244,76 @@ msg = sprintf(['narrow beating (with preamble, %u%% of packets not ' ...
     'reported )'], round(pktnorx_narrow_preamb(EbNo_idx)*100));
 legend('narrow beating (without preamble)', msg)
 ylim([0 inf])
+
+% As shown, there will be an important percentage of packets (though we are 
+% simulating a worst-case scenario in which A2=1, energy diversity in real
+% deployments would decrease the error rate) in which the preamble is 
+% broken, and they are not even reported in the receiver as a packet with a 
+% CRC error. They will be "phantom" transmissions. Therefore, even if some 
+% level of error correction is applied at the application level, a robust 
+% protocol based on CT should implement repetitions to assure a packet 
+% reception is triggered and the payload is reported to the application.
+
+%% Analyzing the effect of the bitrate
+% The largest consequence of duplicating the bitrate is that the beating is
+% widened, e.g. the packet experiences half the amount of valleys since the
+% transmission takes half the time.
+
+pktlen = 128;    % Packet length, in bits (with preamble)
+preamblen = 32;  % Preamble length, in bits
+
+% We arbitrarily fix the beating frequency to 20kHz
+% Beating parameters
+A2 = 1;                % Amplitude of transmitter 2, A1 is assumed to be 1
+fbeat = 20e3;          % Beating frequency (Hz)
+
+% Modulation parameters
+M = 2;         % Modulation order
+Rs = 1e6;      % Symbol rate (1Mbps)
+freqsep = Rs;  % Frequency separation (optimal for noncoherent detection)
+nsamp = 8;     % Number of samples per symbol
+Fs = Rs*nsamp; % Sample rate (Hz)
+
+% Running the simulation
+disp(['Calculating PER for 2 Concurrent Transmitters at 1Mbps ' ...
+    'and 20kHz beating...'])
+[per_1M_20k, errindx_1M_20k,pktnorx_1M_20k] = ...
+    ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,pktlen, preamblen);
+
+% Modulation parameters
+M = 2;         % Modulation order
+Rs = 2e6;      % Symbol rate (2Mbps)
+freqsep = Rs;  % Frequency separation (optimal for noncoherent detection)
+nsamp = 8;     % Number of samples per symbol
+Fs = Rs*nsamp; % Sample rate (Hz)
+
+% Running the simulation
+disp(['Calculating PER for 2 Concurrent Transmitters at 2Mbps ' ...
+    'and 20kHz beating...'])
+[per_2M_20k, errindx_2M_20k,pktnorx_2M_20k] = ...
+    ct_sim_run(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,pktlen, preamblen);
+
+% Plotting the results
+figure
+EbNo_idx = ceil(length(EbNo/2)); %Plot for an arbitrary EbNo index
+plot(1:length(errindx_1M_20k(EbNo_idx,:)),errindx_1M_20k(EbNo_idx,:),'-*')
+hold on;
+plot(1:length(errindx_2M_20k(EbNo_idx,:)), ...
+    errindx_2M_20k(EbNo_idx,:),'-*')
+xlabel('Bit Index')
+ylabel('Error Count')
+msg = sprintf(['20kHz beating at 1Mbps (%u%% of packets not ' ...
+    'reported )'], round(pktnorx_1M_20k(EbNo_idx)*100));
+msg2 = sprintf(['20kHz beating at 2Mbps (%u%% of packets not ' ...
+    'reported )'], round(pktnorx_2M_20k(EbNo_idx)*100));
+legend(msg, msg2)
+ylim([0 inf])
+
+% Which bitrate would perform better would actually depend on the frequency
+% of the beating, which changes for every node pair (or it has a complex 
+% shape for more than 2 CT). Differences in the sensitivity of the receiver
+% at different bitrates should also be considered, i.e. a faster bitrate
+% might have a shorter range due to the wider (noisier) spectrum.
 
 %% Simulator code
 function [per, errindx, pktnorx] = ct_sim_run(M,Fs,nsamp,freqsep,A2, ...
