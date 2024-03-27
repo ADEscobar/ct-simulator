@@ -174,7 +174,7 @@ hold on;
 plot(EbNo,per_narrow,'-*')
 set(gca,'YScale','log')
 xlabel('Eb/N0')
-ylabel('BER')
+ylabel('PER')
 legend('BFSK PER (wide beating)','BFSK PER (narrow beating)')
 
 %% Analyzing error indexes
@@ -315,6 +315,46 @@ ylim([0 inf])
 % at different bitrates should also be considered, i.e. a faster bitrate
 % might have a shorter range due to the wider (noisier) spectrum.
 
+%% Analyzing the effect of coding
+% We will also modify the code of the simulator to analyze the effect of
+% introducing convolutional coding with S=2 and S=8, inspired by the 500k
+% and 125k modes of BLE5.
+% Modulation parameters
+M = 2;         % Modulation order
+Rs = 1e6;      % Symbol rate (1Mbps)
+freqsep = Rs;  % Frequency separation (optimal for noncoherent detection)
+nsamp = 8;     % Number of samples per symbol
+Fs = Rs*nsamp; % Sample rate (Hz)
+
+% We arbitrarily fix the beating parmeters
+A2 = 0.5;             % Amplitude of transmitter 2, A1 is assumed to be 1
+fbeat = 2e3;          % Beating frequency (Hz)
+
+% Running the simulation
+disp(['Calculating PER for 2 Concurrent Transmitters at 500kbps ' ...
+    'and 2kHz beating with coding S=2...'])
+[per_500k_2k, errindx_500k_2k,pktnorx_500k_2k] = ...
+    ct_sim_run_fec(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,pktlen, ...
+    preamblen,false);
+
+% Running the simulation
+disp(['Calculating PER for 2 Concurrent Transmitters at 125kbps ' ...
+    'and 2kHz beating with coding S=8...'])
+[per_125k_2k, errindx_125k_2k,pktnorx_125k_2k] = ...
+    ct_sim_run_fec(M,Fs,nsamp,freqsep,A2,fbeat,EbNo,N,pktlen, ...
+    preamblen,true);
+
+% Plotting the results
+figure
+plot(EbNo,per_500k_2k,'-*')
+hold on
+plot(EbNo,per_125k_2k,'-*')
+set(gca,'YScale','log')
+xlabel('Eb/N0')
+ylabel('PER')
+legend('PER 500kbps, S=2 (2kHz beating, A2=0.5)', ...
+    'PER 125kbps, S=8 (2kHz beating, A2=0.5)')
+
 %% Simulator code
 function [per, errindx, pktnorx] = ct_sim_run(M,Fs,nsamp,freqsep,A2, ...
     fbeat,EbNo,N,pktlen,preamblen)
@@ -344,7 +384,7 @@ function [per, errindx, pktnorx] = ct_sim_run(M,Fs,nsamp,freqsep,A2, ...
         if mod(i-1,pktlen*nsamp) == 0
             phase = 2*pi*rand(); 
         end
-        % We introducethe beating distortion to the modulated signal
+        % We introduce the beating distortion to the modulated signal
         sig_beating(i) = sig_beating(i)*...
             (1-A2+2*A2*abs(cos(2*pi*((fbeat/2)*t(i))+phase)));
     end
@@ -357,7 +397,7 @@ function [per, errindx, pktnorx] = ct_sim_run(M,Fs,nsamp,freqsep,A2, ...
         dataOut = fskdemod(sig_beating_noisy,M,freqsep,nsamp,Fs);
 
         total_pkt = 0;
-        for j = 1:pktlen:(N-pktlen)
+        for j = 1:pktlen:(N-pktlen+1)
             first_pkt_error = true;
             total_pkt = total_pkt+1;
             for s = j:(j+pktlen-1)
@@ -379,4 +419,121 @@ function [per, errindx, pktnorx] = ct_sim_run(M,Fs,nsamp,freqsep,A2, ...
         pktnorx(i) = pktnorx(i)./total_pkt;
         per(i) = per(i)./(N/pktlen);
     end
-end  
+end
+%% Variation for coding
+function [per, errindx, pktnorx] = ct_sim_run_fec(M,Fs,nsamp,freqsep, ...
+    A2,fbeat,EbNo,N,pktlen,preamblen,S8)
+    arguments
+        M (1,1)
+        Fs (1,1)
+        nsamp (1,1)
+        freqsep (1,1)
+        A2 (1,1)
+        fbeat (1,1)
+        EbNo (1,:)
+        N (1,1)
+        pktlen (1,1)
+        preamblen (1,1) {mustBeLessThanOrEqual(preamblen,pktlen)}
+        S8 (1,1) logical
+    end
+
+    if S8
+        coderate = 1/8;
+    else
+        coderate = 1/2;
+    end
+
+    pktnorx = zeros(1,length(EbNo));
+    errindx = zeros(length(EbNo),pktlen);
+    t = 0:1/Fs:(N*nsamp*(1/coderate)/Fs-1/Fs);
+    per = zeros(1,length(EbNo));
+    data = randi([0 M-1],N,1);
+    tPoly = poly2trellis(4,[17 15]);
+    tx_data = zeros(1,(1/coderate)*length(data));
+    coded_data = zeros(1,2*length(data));
+
+    % We code the bitstream with a 1:2 convolutional encoder (S=2)
+    for j = 1:pktlen:(N-pktlen+1)
+        coded_data(2*(j-1)+1:2*(j+pktlen-1)) = convenc( ...
+            data(j:j+pktlen-1),tPoly);
+    end
+    
+    % If we choose S=8 we add a simple orthogonal mapping of 1:4 ratio 
+    if S8
+        for i=1:length(coded_data)
+            if coded_data(i)==0
+                tx_data((4*(i-1)+1):(4*(i-1)+1+3))= [0 0 1 1];
+            else
+                tx_data((4*(i-1)+1):(4*(i-1)+1+3))= [1 1 0 0];
+            end
+        end         
+    else
+        tx_data = coded_data;
+    end
+
+    sig_beating = fskmod(tx_data,M,freqsep,nsamp,Fs);
+
+    for i = 1:length(sig_beating)
+        % We consider a different (and random) initial beating phase for 
+        % each packet transmission
+        if mod(i-1,pktlen*nsamp*(1/coderate)) == 0
+            phase = 2*pi*rand(); 
+        end
+        % We introduce the beating distortion to the modulated signal
+        sig_beating(i) = sig_beating(i)*...
+            (1-A2+2*A2*abs(cos(2*pi*((fbeat/2)*t(i))+phase)));
+    end
+
+    for i = 1:length(EbNo)
+        % We add AWGN noise to the concurrent transmission
+        sig_beating_noisy  = awgn(sig_beating,EbNo(i)+10*log10(log2(M))...
+            -10*log10(nsamp),0,'dB');
+
+        dataOut = fskdemod(sig_beating_noisy,M,freqsep,nsamp,Fs);
+
+        % If S=8 we perform the 4:1 demapping 
+        if S8
+            for z=1:length(coded_data)
+                if sum(dataOut((4*(z-1)+1):(4*(z-1)+1+3)).* ...
+                        [0 0 1 1]) > sum(dataOut((4*(z-1)+1): ...
+                        (4*(z-1)+1+3)).*[1 1 0 0])
+                    dataOut(z) = 0;
+                elseif sum(dataOut((4*(z-1)+1):(4*(z-1)+1+3)).* ...
+                        [0 0 1 1]) < sum(dataOut((4*(z-1)+1): ...
+                        (4*(z-1)+1+3)).*[1 1 0 0])
+                    dataOut(z) = 1;
+                else
+                    dataOut(z) = randi([0, 1], [1, 1]);
+                end 
+            end
+        end
+
+        total_pkt = 0;
+        for j = 1:pktlen:(N-pktlen+1)
+
+            % We decode the received bitstream with a Viterbi decoder 2:1
+            dataOut_dec = vitdec(dataOut(2*(j-1)+1:2*(j+pktlen-1)), ...
+                tPoly,5*(4-1),'trunc','hard');
+            
+            first_pkt_error = true;
+            total_pkt = total_pkt+1;
+            for s = j:(j+pktlen-1)
+                if data(s) ~= dataOut_dec(s-j+1)
+                    if s-j+1 < preamblen
+                        per(i) = per(i)+1;
+                        pktnorx(i) = pktnorx(i)+1;
+                        break;
+                    else
+                        errindx(i,s-j+1) = errindx(i,s-j+1)+1; 
+                        if first_pkt_error
+                            per(i) = per(i)+1;
+                            first_pkt_error = false;
+                        end
+                    end
+                end
+            end
+        end
+        pktnorx(i) = pktnorx(i)./total_pkt;
+        per(i) = per(i)./(N/pktlen);
+    end
+end
